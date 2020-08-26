@@ -1,0 +1,78 @@
+--- 
+- name: Backup current ICU
+  shell: mv /usr/local/src/icu /usr/local/src/icu_bkp && mv /usr/local/include/icu /usr/local/include/icu_bkp
+
+- name: Create new ICU home
+  shell: mkdir -p /usr/local/src/icu
+
+- name: Check version
+  shell: /usr/local/bin/icu-config --version 
+  register: icu_version
+  block: 
+    - name: Stat file existence.
+      stat: path=/usr/local/src/icu4c-58_3-src.tgz 
+      register: fe
+
+    - name: Get the ICU4c-58_3 installer.
+      get_url: url={{ icu_file }} dest=/usr/local/src/icu4c-58_3-src.tgz owner=root group=root force=no
+      environment:
+        TMP: /usr/local/src
+      when: fe.stat.exists == False
+
+    - name: Unpack ICU4c-58_3 package.
+      unarchive: src=/usr/local/src/icu4c-58_3-src.tgz dest=/usr/local/src/ owner=root group=root copy=no creates=/usr/local/src/icu/icu4c-58_3readme.html
+
+    # name: Fix ParagraphLayout.cpp
+    # copy: src=ParagraphLayout.cpp dest=/usr/local/src/icu/source/layoutex/ParagraphLayout.cpp owner=root group=root mode=0644
+
+    - name: Change runConfigureICU Permissions
+      shell: "chmod +x runConfigureICU configure install-sh > /usr/local/src/icu/source/chg_perms.log"
+      args: 
+        chdir: "/usr/local/src/icu/source"
+        creates: "/usr/local/src/icu/source/chg_perms.log"
+
+    - name: runConfigureICU for Linux
+      shell: "/usr/local/src/icu/source/runConfigureICU Linux/gcc > /usr/local/src/icu/source/icu_configure.log 2>&1"
+      args:
+        chdir: "/usr/local/src/icu/source"
+        creates: "/usr/local/src/icu/source/icu_configure.log"
+
+    - name: ICU gmake clean
+      shell: "gmake clean > /usr/local/src/icu/source/icu_clean.log 2>&1"
+      args:
+        chdir: "/usr/local/src/icu/source"
+        creates: "/usr/local/src/icu/source/icu_clean.log"
+
+    - name: ICU gmake
+      shell: "gmake > /usr/local/src/icu/source/icu_make.log 2>&1"
+      args:
+        chdir: "/usr/local/src/icu/source"
+        creates: "/usr/local/src/icu/source/extra/uconv/uconvmsg/libuconvmsg.a"
+
+    - name: ICU gmake check
+      shell: "gmake -k check > /usr/local/src/icu/source/icu_check.log 2>&1"
+      args:
+        chdir: "/usr/local/src/icu/source"
+        creates: "/usr/local/src/icu/source/icu_check.log"
+
+    - name: ICU gmake install
+      shell: "gmake install > /usr/local/src/icu/source/icu_install.log 2>&1"
+      args:
+        chdir: "/usr/local/src/icu/source"
+        creates: "/usr/local/lib/libicuuc.so"
+
+    #If Banner General 8.12.2 installed, the following can be skipped
+    #- name: Source Banner env
+     # shell: ". /home/svc_banner/.bash_profile"
+    #- name: Copy ICU583_ban
+    #  shell: "sudo -u svc_banner $BANNER_HOME/general/misc/copyICU583_ban.shl > copyICU583_ban.log" owner=svc_banner group=banner mode=0755
+    #  args: 
+     #   chdir: "$BANNER_HOME"
+      #  creates: "$BANNER_HOME/copyICU583_ban.log"
+  when: version.stdout == "3.6" or version.stdout == "52.1"
+  
+#- name: Create ban_icu/unicode directory.
+#  file: path=/usr/local/src/ban_icu/unicode state=directory owner=root group=root mode=0755
+
+#- name: Copy msgfmt.h
+#  copy: src=msgfmt.h dest=/usr/local/src/ban_icu/unicode/msgfmt.h owner=root group=root mode=0644
